@@ -37,7 +37,12 @@ export async function translate(data: any) {
 
   console.log(result.choices[0]?.message?.content, '\n')
 
-  return result.choices[0]?.message?.content
+  try {
+    return JSON.parse(result.choices[0]?.message?.content || '')
+  } catch (err) {
+    console.error(err)
+    throw new Error('Invalid JSON')
+  }
 }
 
 /* translate(data).catch((err) => {

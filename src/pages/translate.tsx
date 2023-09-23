@@ -36,9 +36,11 @@ function useIPC() {
 
   const [translations, dispatch] = useReducer(translationsReducer, [])
 
-  const [newTranslation, setNewTranslation] = useState<Translation>()
+  const [newTranslation, setNewTranslation] = useState<any>()
 
   const [isLoading, setIsLoading] = useState(false)
+
+  const [error, setError] = useState({ status: false, message: '' })
 
   useEffect(() => {
     const unsub = window.electron.ipcRenderer.on('ipc-example', (arg) => {
@@ -59,13 +61,21 @@ function useIPC() {
     get()
   }, [update])
 
-  const translate = useCallback(async (data: any) => {
+  async function translate(data: any) {
     setIsLoading(true)
-    const result = await window.electron.translate(data)
-    console.log(result)
-    setNewTranslation(result)
-    setIsLoading(false)
-  }, [])
+    try {
+      const res = await window.electron.translate(data)
+      if (!res.ok) {
+        setError({ status: true, message: res.msg })
+      } else {
+        setNewTranslation(res.data)
+        setError({ status: false, message: '' })
+        dispatch({ type: 'CREATE', payload: res.data })
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return {
     translations,
@@ -73,12 +83,21 @@ function useIPC() {
     translate,
     newTranslation,
     isLoading,
+    error,
+    isError: error.status,
   }
 }
 
 export default function Translate() {
-  const { translations, refetch, translate, newTranslation, isLoading } =
-    useIPC()
+  const {
+    translations,
+    refetch,
+    translate,
+    newTranslation,
+    isLoading,
+    isError,
+    error,
+  } = useIPC()
 
   return (
     <Layout title='Translate'>
@@ -104,6 +123,7 @@ export default function Translate() {
       </Button>
       <pre>
         {isLoading && <p>Loading...</p>}
+        {isError && <p>Error...{error.message}</p>}
         {newTranslation && JSON.stringify(newTranslation, null, 2)}
       </pre>
     </Layout>

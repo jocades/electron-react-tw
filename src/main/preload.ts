@@ -7,6 +7,20 @@ export type Channels =
   | 'tls:update'
   | 'tls:delete'
 
+type ICPOKResponse<T> = {
+  ok: true
+  data: T
+}
+
+type IPCErrorResponse = {
+  ok: false
+  msg: string
+}
+
+type IPCResponse<T = unknown> = ICPOKResponse<T> | IPCErrorResponse
+
+type OPENAIResponse = Record<string, unknown>
+
 const electronHandler = {
   ipcRenderer: {
     sendMessage(channel: Channels, ...args: unknown[]) {
@@ -25,13 +39,15 @@ const electronHandler = {
       ipcRenderer.once(channel, (_event, ...args) => func(...args))
     },
   },
-  translate: (data: any) => ipcRenderer.invoke('translate', data),
+  translate: (data: any) => {
+    return ipcRenderer.invoke('translate', data)
+  },
   db: {
     tls: {
       list: () => ipcRenderer.invoke('tls:list'),
       create: (name: string) => ipcRenderer.invoke('tls:create', name),
       update: (id: number, name: string) => {
-        ipcRenderer.invoke('tls:update', id, name)
+        return ipcRenderer.invoke('tls:update', id, name)
       },
       delete: (id: number) => ipcRenderer.invoke('tls:delete', id),
     },

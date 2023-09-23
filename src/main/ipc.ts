@@ -21,8 +21,14 @@ export function loadIPC() {
   })
 
   ipcMain.handle('translate', async (event, data) => {
-    const result = await translate(data)
+    // const result = await translate(data)
     console.log('recieved data', data)
-    return result
+    try {
+      const result = await translate(data)
+      return { ok: true, data: result }
+    } catch (err: any) {
+      console.error(err)
+      return { ok: false, msg: err.message }
+    }
   })
 }
