@@ -7,7 +7,7 @@ root.render(<App />)
 
 // calling IPC exposed from preload script
 window.electron.ipcRenderer.once('ipc-example', (arg) => {
-  console.log(arg)
+  console.log('Received from main process:', arg)
 })
 
 window.electron.ipcRenderer.sendMessage('ipc-example', ['ping'])

@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
-export type Channels = 'ipc-example'
+export type Channels =
+  | 'ipc-example'
+  | 'tls:list'
+  | 'tls:create'
+  | 'tls:update'
+  | 'tls:delete'
 
 const electronHandler = {
   ipcRenderer: {
@@ -18,6 +23,17 @@ const electronHandler = {
     },
     once(channel: Channels, func: (...args: unknown[]) => void) {
       ipcRenderer.once(channel, (_event, ...args) => func(...args))
+    },
+  },
+  translate: (data: any) => ipcRenderer.invoke('translate', data),
+  db: {
+    tls: {
+      list: () => ipcRenderer.invoke('tls:list'),
+      create: (name: string) => ipcRenderer.invoke('tls:create', name),
+      update: (id: number, name: string) => {
+        ipcRenderer.invoke('tls:update', id, name)
+      },
+      delete: (id: number) => ipcRenderer.invoke('tls:delete', id),
     },
   },
 }

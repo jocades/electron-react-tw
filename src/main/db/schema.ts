@@ -4,7 +4,7 @@ export const translations = sqliteTable('translation', {
   id: integer('id').primaryKey(),
   from: text('from').notNull(),
   to: text('to').notNull(),
-  content: text('content').notNull(), // -> json
+  content: text('content', { mode: 'json' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 

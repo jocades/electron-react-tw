@@ -1,5 +1,7 @@
 import { Layout } from '@/components/layout/root'
 import { delay } from '@/lib/utils'
+import { db } from '@/main/db'
+import { Translation } from '@/main/db/schema'
 import { useQuery, UseQueryOptions } from '@tanstack/react-query'
 
 interface User {
@@ -38,6 +40,10 @@ const api = {
             .then((res) => res.json())
         },
       }),
+  },
+  translations: {
+    list: (options: UseQueryOptions<User[], Error> = {}) => {
+    },
   },
 }
 
