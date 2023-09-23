@@ -1,5 +1,3 @@
-/* eslint global-require: off, no-console: off, promise/always-return: off */
-
 /**
  * This module executes inside of electron's main process. You can start
  * electron renderer process from here and communicate with the other processes
@@ -14,6 +12,9 @@ import { autoUpdater } from 'electron-updater'
 import log from 'electron-log'
 import MenuBuilder from './menu'
 import { resolveHtmlPath } from './util'
+import { config as dotenvConfig } from 'dotenv'
+
+dotenvConfig()
 
 class AppUpdater {
   constructor() {
@@ -108,7 +109,6 @@ async function createWindow() {
   })
 
   // Remove this if your app does not use auto updates
-  // eslint-disable-next-line
   new AppUpdater()
 }
 
@@ -128,6 +128,7 @@ app
   .whenReady()
   .then(() => {
     createWindow()
+    console.log('ENV', process.env.TEST)
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.

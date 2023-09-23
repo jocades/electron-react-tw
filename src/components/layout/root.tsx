@@ -1,9 +1,4 @@
-function Nav() {
-  return (
-    <div className='sticky top-0 z-50 flex items-center justify-between w-full px-4 py-2 bg-zinc-300'>
-    </div>
-  )
-}
+import { SideBar } from '../sidebar'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -12,11 +7,11 @@ interface LayoutProps {
 
 export function Layout({ children, title }: LayoutProps) {
   return (
-    <>
-      <title>{title}</title>
-      <section className='flex flex-col items-center justify-center min-h-screen py-2'>
+    <main className='dark'>
+      <SideBar />
+      <div className='flex flex-col min-h-screen ml-14'>
         {children}
-      </section>
-    </>
+      </div>
+    </main>
   )
 }
