@@ -1,4 +1,4 @@
-import { SideBar } from '../sidebar'
+import { NavBar } from '../navbar'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -8,7 +8,7 @@ interface LayoutProps {
 export function Layout({ children, title }: LayoutProps) {
   return (
     <main className='dark'>
-      <SideBar />
+      <NavBar />
       <div className='flex flex-col min-h-screen ml-14'>
         {children}
       </div>

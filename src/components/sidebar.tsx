@@ -1,58 +1,85 @@
-import { HomeIcon, LanguagesIcon } from 'lucide-react'
-import { Link, useLocation } from 'react-router-dom'
-import { cn } from '@/lib/utils'
-
-interface NavItem {
-  title: string
-  href: string
-  icon?: React.ReactNode
-  disabled?: boolean
-  external?: boolean
-}
-
-const nav: NavItem[] = [
-  {
-    title: 'Home',
-    href: '/',
-    icon: <HomeIcon />,
-  },
-  {
-    title: 'Translate',
-    href: '/translate',
-    icon: <LanguagesIcon />,
-  },
-]
+import { Translation } from '@/main/db/schema'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 
 export function SideBar() {
-  const { pathname } = useLocation()
-
-  return (
-    <div className='fixed top-0 left-0 h-screen w-14 bg-zinc-800 flex flex-col items-center pt-8 space-y-2'>
-      {nav.map((item, i) => (
-        <SideBarLink
-          key={i}
-          item={item}
-          path={pathname}
-        />
-      ))}
-    </div>
-  )
+  return null
 }
 
-function SideBarLink({ item, path }: { item: NavItem; path: string }) {
-  const isActive = path === item.href
+type Action =
+  | { type: 'SET'; payload: Translation[] }
+  | { type: 'CREATE'; payload: Translation }
+  | { type: 'UPDATE'; payload: Translation }
+  | { type: 'DELETE'; payload: { id: number } }
 
-  return (
-    <Link
-      to={item.href}
-      className={cn(
-        'relative flex items-center justify-center w-10 h-10 mx-auto shadow-lg bg-nord-night-1',
-        'text-muted-foreground hover:bg-nord-frost-4 hover:text-nord-snow-1 rounded-full hover:rounded-xl',
-        'transition-all duration-100 ease-linear cursor-pointer',
-        isActive && 'bg-nord-frost-4 text-nord-snow-1 rounded-xl',
-      )}
-    >
-      {item.icon}
-    </Link>
-  )
+function translationsReducer(state: Translation[], { type, payload }: Action) {
+  switch (type) {
+    case 'SET':
+      return payload
+    case 'CREATE':
+      return [payload, ...state]
+    case 'UPDATE':
+      return [payload, ...state.filter((group) => group.id !== payload.id)]
+    case 'DELETE':
+      return state.filter((group) => group.id !== payload.id)
+    default:
+      return state
+  }
+}
+
+function useIPC<T = any>({
+  fn = async () => {
+    console.log('fn')
+  },
+} = {}) {
+  const [update, forceUpdate] = useReducer((x) => x + 1, 0)
+
+  const [translations, dispatch] = useReducer(translationsReducer, [])
+
+  const [data, setData] = useState<T>()
+
+  const [isLoading, setIsLoading] = useState(false)
+
+  const [error, setError] = useState({ status: false, message: '' })
+
+  useEffect(() => {
+    const unsub = window.electron.ipcRenderer.on('ipc-example', (arg) => {
+      console.log('Received from main process:', arg)
+    })
+
+    return () => {
+      unsub()
+      console.log('unsubscribed, component unmounted')
+    }
+  }, [])
+
+  useEffect(() => {
+    const get = async () => {
+      const data: Translation[] = await window.electron.db.tls.list()
+      dispatch({ type: 'SET', payload: data })
+    }
+    get()
+  }, [update])
+
+  async function translate(data: any) {
+    setIsLoading(true)
+    try {
+      const res = await window.electron.translate(data)
+      setData(res.data)
+      setError({ status: false, message: '' })
+    } catch (err: any) {
+      setError({ status: true, message: err.message })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return {
+    translations,
+    refetch: () => forceUpdate(),
+    translate,
+    newTranslation: data,
+    isLoading,
+    error,
+    isError: error.status,
+  }
 }
