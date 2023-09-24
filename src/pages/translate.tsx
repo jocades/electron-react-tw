@@ -1,5 +1,12 @@
 import { Layout } from '@/components/layout/root'
-import { HistoryIcon } from 'lucide-react'
+import {
+  BracesIcon,
+  Check,
+  ChevronsUpDown,
+  HistoryIcon,
+  MessageCircleIcon,
+  XIcon,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -24,6 +31,14 @@ import { TemperatureSelector } from '@/components/playground/temperature-selecto
 import { TopPSelector } from '@/components/playground/top-p-selector'
 import { useState } from 'react'
 import { ElectronHandler } from '@/main/preload'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Input } from '@/components/ui/input'
+import useToggle from '@/lib/hooks/use-toggle'
+import { LanguageSelector } from '@/components/language-selector'
 
 /*
  * Main task for now is to open the file explirer, select a json file,
@@ -34,7 +49,7 @@ import { ElectronHandler } from '@/main/preload'
 
 type Use<T extends (...args: any[]) => any> = Awaited<ReturnType<T>>
 
-interface Options<T, E> {
+interface IPCOptions<T, E> {
   fn: (ipc: ElectronHandler) => T | Promise<T>
   onSucces?: (data: T) => void
   onError?: (error: E) => void
@@ -44,7 +59,7 @@ function useIPC<T, E extends Error = Error>({
   fn,
   onSucces = () => {},
   onError = () => {},
-}: Options<T, E>) {
+}: IPCOptions<T, E>) {
   const [data, setData] = useState<T>()
 
   const [isLoading, setIsLoading] = useState(false)
@@ -75,6 +90,59 @@ function useIPC<T, E extends Error = Error>({
   }
 }
 
+// const { mutate, data, isLoading, ... } = useIPCMutation({
+//  fn: async (newData) => {
+//    const res = await ipc.translate({ text: newData })
+//    return res.data
+//    }
+// })
+
+interface IPCMutationOptions<T, E, I> {
+  fn: (ctx: Ctx<I>) => T | Promise<T>
+  onSucces?: (data: T) => void
+  onError?: (error: E) => void
+}
+
+interface Ctx<I> {
+  ipc: ElectronHandler
+  input: I
+}
+
+function useIPCMutation<T, I = unknown, E extends Error = Error>({
+  fn,
+  onSucces = () => {},
+  onError = () => {},
+}: IPCMutationOptions<T, E, I>) {
+  const [data, setData] = useState<T>()
+
+  const [isLoading, setIsLoading] = useState(false)
+
+  const [error, setError] = useState({ status: false, message: '' })
+
+  async function mutate(input: I) {
+    setIsLoading(true)
+    try {
+      const result = await fn({ ipc: window.electron, input })
+      setError({ status: false, message: '' })
+      setData(result)
+      onSucces(result)
+    } catch (err: any) {
+      setError({ status: true, message: err.message })
+      onError(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return {
+    mutate,
+    data,
+    isLoading,
+    error,
+    isError: error.status,
+  }
+}
+
 /*
  * Input editor:
  * - plain text (default)
@@ -83,16 +151,27 @@ function useIPC<T, E extends Error = Error>({
  * - Import json, csv, excel
  */
 
-interface Data {
-  text: string
+type Data = Record<string, string>
+
+interface KV {
+  key: string
+  value: string
 }
 
 export default function Translate() {
-  const [text, setText] = useState('')
+  const [kv, setKv] = useState<KV[]>([{ key: '', value: '' }])
 
-  const { exec, data, isLoading, isError, error } = useIPC<Data>({
-    fn: async (ipc) => {
-      const res = await ipc.translate({ text })
+  const [langTo, setLangTo] = useState({ label: 'English', value: 'en' })
+
+  const [showLangFrom, toggleLangFrom] = useToggle()
+  const [showLangTo, toggleLangTo] = useToggle()
+
+  const { mutate, data, isLoading, isError, error } = useIPCMutation<
+    Data,
+    Data
+  >({
+    fn: async ({ ipc, input }) => {
+      const res = await ipc.translate(input)
       return res.data
     },
     onSucces: (data) => {
@@ -103,11 +182,23 @@ export default function Translate() {
     },
   })
 
+  async function onSubmitKv() {
+    const json = kv
+      .filter((item) => !!item.key?.trim() && !!item.value?.trim())
+      .reduce((acc, item) => ({
+        ...acc,
+        [item.key]: item.value,
+      }), {})
+
+    console.log('data', json)
+    await mutate(json)
+  }
+
   return (
     <Layout>
       <div className='hidden h-full flex-col md:flex'>
         <div className='container flex flex-col items-start justify-between space-y-2 py-4 sm:flex-row sm:items-center sm:space-y-0 md:h-16'>
-          <h2 className='text-lg font-semibold'>Playground</h2>
+          <h2 className='text-lg font-semibold'>Translate</h2>
           <div className='ml-auto flex w-full space-x-2 sm:justify-end'>
             <PresetSelector presets={presets} />
             <PresetSave />
@@ -119,7 +210,7 @@ export default function Translate() {
           </div>
         </div>
         <Separator />
-        <Tabs defaultValue='complete' className='flex-1'>
+        <Tabs defaultValue='json' className='flex-1'>
           <div className='container h-full py-6'>
             <div className='grid h-full items-stretch gap-6 md:grid-cols-[1fr_200px]'>
               <div className='hidden flex-col space-y-4 sm:flex md:order-2'>
@@ -138,123 +229,28 @@ export default function Translate() {
                     </HoverCardContent>
                   </HoverCard>
                   <TabsList className='grid grid-cols-3'>
-                    <TabsTrigger value='json'>
-                      <span className='sr-only'>Complete</span>
-                      <svg
-                        xmlns='http://www.w3.org/2000/svg'
-                        viewBox='0 0 20 20'
-                        fill='none'
-                        className='h-5 w-5'
-                      >
-                        <rect
-                          x='4'
-                          y='3'
-                          width='12'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='4'
-                          y='7'
-                          width='12'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='4'
-                          y='11'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='4'
-                          y='15'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='8.5'
-                          y='11'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='8.5'
-                          y='15'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='13'
-                          y='11'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                      </svg>
-                    </TabsTrigger>
-                    <TabsTrigger value='text'>
-                      <span className='sr-only'>Insert</span>
-                      <svg
-                        xmlns='http://www.w3.org/2000/svg'
-                        viewBox='0 0 20 20'
-                        fill='none'
-                        className='h-5 w-5'
-                      >
-                        <path
-                          fillRule='evenodd'
-                          clipRule='evenodd'
-                          d='M14.491 7.769a.888.888 0 0 1 .287.648.888.888 0 0 1-.287.648l-3.916 3.667a1.013 1.013 0 0 1-.692.268c-.26 0-.509-.097-.692-.268L5.275 9.065A.886.886 0 0 1 5 8.42a.889.889 0 0 1 .287-.64c.181-.17.427-.267.683-.269.257-.002.504.09.69.258L8.903 9.87V3.917c0-.243.103-.477.287-.649.183-.171.432-.268.692-.268.26 0 .509.097.692.268a.888.888 0 0 1 .287.649V9.87l2.245-2.102c.183-.172.432-.269.692-.269.26 0 .508.097.692.269Z'
-                          fill='currentColor'
-                        >
-                        </path>
-                        <rect
-                          x='4'
-                          y='15'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='8.5'
-                          y='15'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                        <rect
-                          x='13'
-                          y='15'
-                          width='3'
-                          height='2'
-                          rx='1'
-                          fill='currentColor'
-                        >
-                        </rect>
-                      </svg>
-                    </TabsTrigger>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <TabsTrigger value='json'>
+                          <span className='sr-only'>Complete</span>
+                          <BracesIcon className='h-4 w-4' />
+                          <TooltipContent side='bottom'>
+                            JSON
+                          </TooltipContent>
+                        </TabsTrigger>
+                      </TooltipTrigger>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <TabsTrigger value='text'>
+                          <MessageCircleIcon className='h-4 w-4' />
+                          <TooltipContent side='bottom'>
+                            Text
+                          </TooltipContent>
+                        </TabsTrigger>
+                      </TooltipTrigger>
+                    </Tooltip>
                     <TabsTrigger value='edit'>
                       <span className='sr-only'>Edit</span>
                       <svg
@@ -321,18 +317,81 @@ export default function Translate() {
                 <TemperatureSelector defaultValue={[0.56]} />
                 <MaxLengthSelector defaultValue={[256]} />
                 <TopPSelector defaultValue={[0.9]} />
+                <LanguageSelector value='es' />
+                <LanguageSelector value='en' />
               </div>
               <div className='md:order-1'>
                 <TabsContent value='json' className='mt-0 border-0 p-0'>
                   <div className='flex h-full flex-col space-y-4'>
-                    <Textarea
+                    {
+                      /* <Textarea
                       onChange={(e) => setText(e.target.value)}
                       value={text}
                       placeholder='Write a tagline for an ice cream shop'
                       className='min-h-[400px] flex-1 p-4 md:min-h-[700px] lg:min-h-[700px]'
-                    />
+                    /> */
+                    }
+                    {/*  key valeu intpu*/}
+
+                    <div className='flex items-center justify-around'>
+                      <h3 className='text-sm font-medium leading-none'>
+                        KEY
+                      </h3>
+                      <h3 className='text-sm font-medium leading-none'>
+                        VALUE
+                      </h3>
+                    </div>
+
+                    {kv.map((item, i) => (
+                      <div key={i} className='flex items-center space-x-2'>
+                        <Input
+                          value={item.key}
+                          onChange={(e) => {
+                            setKv((prev) => {
+                              const temp = [...prev]
+                              temp[i].key = e.target.value
+                              return temp
+                            })
+                          }}
+                        />
+                        <Input
+                          value={item.value}
+                          onChange={(e) => {
+                            setKv((prev) => {
+                              const temp = [...prev]
+                              temp[i].value = e.target.value
+                              return temp
+                            })
+                          }}
+                        />
+                        <Button
+                          variant='destructive'
+                          size='sm'
+                          onClick={() => {
+                            setKv((prev) => {
+                              const temp = [...prev]
+                              temp.splice(i, 1)
+                              return temp
+                            })
+                          }}
+                        >
+                          <span className='sr-only'>Remove</span>
+                          <XIcon className='h-4 w-4' />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      className='self-end'
+                      onClick={() =>
+                        setKv((prev) => [...prev, { key: '', value: '' }])}
+                    >
+                      Add
+                    </Button>
+
                     <div className='flex items-center space-x-2'>
-                      <Button onClick={() => exec()}>Submit</Button>
+                      <Button onClick={() => onSubmitKv()}>
+                        Submit
+                      </Button>
                       <Button variant='secondary'>
                         <span className='sr-only'>Show history</span>
                         <HistoryIcon className='h-4 w-4' />
@@ -344,8 +403,8 @@ export default function Translate() {
                   <div className='flex flex-col space-y-4'>
                     <div className='grid h-full grid-rows-2 gap-6 lg:grid-cols-2 lg:grid-rows-1'>
                       <Textarea
-                        value={text}
-                        onChange={(e) => setText(e.target.value)}
+                        // value={text}
+                        // onChange={(e) => setText(e.target.value)}
                         placeholder="We're writing to [inset]. Congrats from OpenAI!"
                         className='h-full min-h-[300px] lg:min-h-[700px] xl:min-h-[700px]'
                       />
@@ -355,10 +414,10 @@ export default function Translate() {
                     </div>
                     <div className='flex items-center space-x-2'>
                       <Button
-                        onClick={async () => {
-                          if (!text?.trim) return
-                          await exec()
-                        }}
+                        // onClick={async () => {
+                        //   if (!text?.trim) return
+                        //   await exec()
+                        // }}
                       >
                         Submit
                       </Button>
