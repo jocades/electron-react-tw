@@ -1,6 +1,29 @@
-import { Layout } from '@/components/layout/root';
-import { Translation } from '@/main/db/schema';
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { Layout } from '@/components/layout/root'
+import { HistoryIcon } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
+import { CodeViewer } from '@/components/playground/code-viewer'
+import { models, types } from '@/components/playground/data/models'
+import { presets } from '@/components/playground/data/presets'
+import { MaxLengthSelector } from '@/components/playground/maxlength-selector'
+import { ModelSelector } from '@/components/playground/model-selector'
+import { PresetActions } from '@/components/playground/preset-actions'
+import { PresetSave } from '@/components/playground/preset-save'
+import { PresetSelector } from '@/components/playground/preset-selector'
+import { PresetShare } from '@/components/playground/preset-share'
+import { TemperatureSelector } from '@/components/playground/temperature-selector'
+import { TopPSelector } from '@/components/playground/top-p-selector'
+import { useState } from 'react'
+import { ElectronHandler } from '@/main/preload'
 
 /*
  * Main task for now is to open the file explirer, select a json file,
@@ -9,27 +32,37 @@ import { useCallback, useEffect, useReducer, useState } from 'react';
  * Paint the reponse in this page.
  */
 
-interface Options {
-  fn: (...args: any[]) => any;
+type Use<T extends (...args: any[]) => any> = Awaited<ReturnType<T>>
+
+interface Options<T, E> {
+  fn: (ipc: ElectronHandler) => T | Promise<T>
+  onSucces?: (data: T) => void
+  onError?: (error: E) => void
 }
 
-function useIPC({ fn }: Options) {
-  const [data, setData] = useState();
+function useIPC<T, E extends Error = Error>({
+  fn,
+  onSucces = () => {},
+  onError = () => {},
+}: Options<T, E>) {
+  const [data, setData] = useState<T>()
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false)
 
-  const [error, setError] = useState({ status: false, message: '' });
+  const [error, setError] = useState({ status: false, message: '' })
 
   async function exec() {
-    setIsLoading(true);
+    setIsLoading(true)
     try {
-      const result = await fn();
-      setData(result);
-      setError({ status: false, message: '' });
+      const result = await fn(window.electron)
+      setData(result)
+      setError({ status: false, message: '' })
+      onSucces(result)
     } catch (err: any) {
-      setError({ status: true, message: err.message });
+      setError({ status: true, message: err.message })
+      onError(err)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
   }
 
@@ -39,7 +72,7 @@ function useIPC({ fn }: Options) {
     isLoading,
     error,
     isError: error.status,
-  };
+  }
 }
 
 /*
@@ -50,49 +83,35 @@ function useIPC({ fn }: Options) {
  * - Import json, csv, excel
  */
 
-import { HistoryIcon } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
-import { CodeViewer } from '@/components/playground/code-viewer';
-import { models, types } from '@/components/playground/data/models';
-import { presets } from '@/components/playground/data/presets';
-import { MaxLengthSelector } from '@/components/playground/maxlength-selector';
-import { ModelSelector } from '@/components/playground/model-selector';
-import { PresetActions } from '@/components/playground/preset-actions';
-import { PresetSave } from '@/components/playground/preset-save';
-import { PresetSelector } from '@/components/playground/preset-selector';
-import { PresetShare } from '@/components/playground/preset-share';
-import { TemperatureSelector } from '@/components/playground/temperature-selector';
-import { TopPSelector } from '@/components/playground/top-p-selector';
+interface Data {
+  text: string
+}
 
 export default function Translate() {
-  const { exec, data, isLoading, isError, error } = useIPC({
-    fn: async () => {
-      const res = await window.electron.translate({
-        text: 'Hola me llamo Jordi',
-      });
-      return res.data;
+  const [text, setText] = useState('')
+
+  const { exec, data, isLoading, isError, error } = useIPC<Data>({
+    fn: async (ipc) => {
+      const res = await ipc.translate({ text })
+      return res.data
     },
-  });
+    onSucces: (data) => {
+      console.log('onSucces', data)
+    },
+    onError: (error) => {
+      console.log('onError', error)
+    },
+  })
 
   return (
-    <>
-      <div className="hidden h-full flex-col md:flex">
-        <div className="container flex flex-col items-start justify-between space-y-2 py-4 sm:flex-row sm:items-center sm:space-y-0 md:h-16">
-          <h2 className="text-lg font-semibold">Playground</h2>
-          <div className="ml-auto flex w-full space-x-2 sm:justify-end">
+    <Layout>
+      <div className='hidden h-full flex-col md:flex'>
+        <div className='container flex flex-col items-start justify-between space-y-2 py-4 sm:flex-row sm:items-center sm:space-y-0 md:h-16'>
+          <h2 className='text-lg font-semibold'>Playground</h2>
+          <div className='ml-auto flex w-full space-x-2 sm:justify-end'>
             <PresetSelector presets={presets} />
             <PresetSave />
-            <div className="hidden space-x-2 md:flex">
+            <div className='hidden space-x-2 md:flex'>
               <CodeViewer />
               <PresetShare />
             </div>
@@ -100,183 +119,200 @@ export default function Translate() {
           </div>
         </div>
         <Separator />
-        <Tabs defaultValue="complete" className="flex-1">
-          <div className="container h-full py-6">
-            <div className="grid h-full items-stretch gap-6 md:grid-cols-[1fr_200px]">
-              <div className="hidden flex-col space-y-4 sm:flex md:order-2">
-                <div className="grid gap-2">
+        <Tabs defaultValue='complete' className='flex-1'>
+          <div className='container h-full py-6'>
+            <div className='grid h-full items-stretch gap-6 md:grid-cols-[1fr_200px]'>
+              <div className='hidden flex-col space-y-4 sm:flex md:order-2'>
+                <div className='grid gap-2'>
                   <HoverCard openDelay={200}>
                     <HoverCardTrigger asChild>
-                      <span className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                      <span className='text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70'>
                         Mode
                       </span>
                     </HoverCardTrigger>
-                    <HoverCardContent className="w-[320px] text-sm" side="left">
+                    <HoverCardContent className='w-[320px] text-sm' side='left'>
                       Choose the interface that best suits your task. You can
                       provide: a simple prompt to complete, starting and ending
                       text to insert a completion within, or some text with
                       instructions to edit it.
                     </HoverCardContent>
                   </HoverCard>
-                  <TabsList className="grid grid-cols-3">
-                    <TabsTrigger value="complete">
-                      <span className="sr-only">Complete</span>
+                  <TabsList className='grid grid-cols-3'>
+                    <TabsTrigger value='json'>
+                      <span className='sr-only'>Complete</span>
                       <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        className="h-5 w-5"
+                        xmlns='http://www.w3.org/2000/svg'
+                        viewBox='0 0 20 20'
+                        fill='none'
+                        className='h-5 w-5'
                       >
                         <rect
-                          x="4"
-                          y="3"
-                          width="12"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='3'
+                          width='12'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="4"
-                          y="7"
-                          width="12"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='7'
+                          width='12'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="4"
-                          y="11"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='11'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="4"
-                          y="15"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='15'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="8.5"
-                          y="11"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='8.5'
+                          y='11'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="8.5"
-                          y="15"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='8.5'
+                          y='15'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="13"
-                          y="11"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='13'
+                          y='11'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                       </svg>
                     </TabsTrigger>
-                    <TabsTrigger value="insert">
-                      <span className="sr-only">Insert</span>
+                    <TabsTrigger value='text'>
+                      <span className='sr-only'>Insert</span>
                       <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        className="h-5 w-5"
+                        xmlns='http://www.w3.org/2000/svg'
+                        viewBox='0 0 20 20'
+                        fill='none'
+                        className='h-5 w-5'
                       >
                         <path
-                          fillRule="evenodd"
-                          clipRule="evenodd"
-                          d="M14.491 7.769a.888.888 0 0 1 .287.648.888.888 0 0 1-.287.648l-3.916 3.667a1.013 1.013 0 0 1-.692.268c-.26 0-.509-.097-.692-.268L5.275 9.065A.886.886 0 0 1 5 8.42a.889.889 0 0 1 .287-.64c.181-.17.427-.267.683-.269.257-.002.504.09.69.258L8.903 9.87V3.917c0-.243.103-.477.287-.649.183-.171.432-.268.692-.268.26 0 .509.097.692.268a.888.888 0 0 1 .287.649V9.87l2.245-2.102c.183-.172.432-.269.692-.269.26 0 .508.097.692.269Z"
-                          fill="currentColor"
-                        ></path>
+                          fillRule='evenodd'
+                          clipRule='evenodd'
+                          d='M14.491 7.769a.888.888 0 0 1 .287.648.888.888 0 0 1-.287.648l-3.916 3.667a1.013 1.013 0 0 1-.692.268c-.26 0-.509-.097-.692-.268L5.275 9.065A.886.886 0 0 1 5 8.42a.889.889 0 0 1 .287-.64c.181-.17.427-.267.683-.269.257-.002.504.09.69.258L8.903 9.87V3.917c0-.243.103-.477.287-.649.183-.171.432-.268.692-.268.26 0 .509.097.692.268a.888.888 0 0 1 .287.649V9.87l2.245-2.102c.183-.172.432-.269.692-.269.26 0 .508.097.692.269Z'
+                          fill='currentColor'
+                        >
+                        </path>
                         <rect
-                          x="4"
-                          y="15"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='15'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="8.5"
-                          y="15"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='8.5'
+                          y='15'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="13"
-                          y="15"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='13'
+                          y='15'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                       </svg>
                     </TabsTrigger>
-                    <TabsTrigger value="edit">
-                      <span className="sr-only">Edit</span>
+                    <TabsTrigger value='edit'>
+                      <span className='sr-only'>Edit</span>
                       <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        className="h-5 w-5"
+                        xmlns='http://www.w3.org/2000/svg'
+                        viewBox='0 0 20 20'
+                        fill='none'
+                        className='h-5 w-5'
                       >
                         <rect
-                          x="4"
-                          y="3"
-                          width="12"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='3'
+                          width='12'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="4"
-                          y="7"
-                          width="12"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='7'
+                          width='12'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="4"
-                          y="11"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='11'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="4"
-                          y="15"
-                          width="4"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='4'
+                          y='15'
+                          width='4'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <rect
-                          x="8.5"
-                          y="11"
-                          width="3"
-                          height="2"
-                          rx="1"
-                          fill="currentColor"
-                        ></rect>
+                          x='8.5'
+                          y='11'
+                          width='3'
+                          height='2'
+                          rx='1'
+                          fill='currentColor'
+                        >
+                        </rect>
                         <path
-                          d="M17.154 11.346a1.182 1.182 0 0 0-1.671 0L11 15.829V17.5h1.671l4.483-4.483a1.182 1.182 0 0 0 0-1.671Z"
-                          fill="currentColor"
-                        ></path>
+                          d='M17.154 11.346a1.182 1.182 0 0 0-1.671 0L11 15.829V17.5h1.671l4.483-4.483a1.182 1.182 0 0 0 0-1.671Z'
+                          fill='currentColor'
+                        >
+                        </path>
                       </svg>
                     </TabsTrigger>
                   </TabsList>
@@ -286,67 +322,80 @@ export default function Translate() {
                 <MaxLengthSelector defaultValue={[256]} />
                 <TopPSelector defaultValue={[0.9]} />
               </div>
-              <div className="md:order-1">
-                <TabsContent value="complete" className="mt-0 border-0 p-0">
-                  <div className="flex h-full flex-col space-y-4">
+              <div className='md:order-1'>
+                <TabsContent value='json' className='mt-0 border-0 p-0'>
+                  <div className='flex h-full flex-col space-y-4'>
                     <Textarea
-                      placeholder="Write a tagline for an ice cream shop"
-                      className="min-h-[400px] flex-1 p-4 md:min-h-[700px] lg:min-h-[700px]"
+                      onChange={(e) => setText(e.target.value)}
+                      value={text}
+                      placeholder='Write a tagline for an ice cream shop'
+                      className='min-h-[400px] flex-1 p-4 md:min-h-[700px] lg:min-h-[700px]'
                     />
-                    <div className="flex items-center space-x-2">
-                      <Button>Submit</Button>
-                      <Button variant="secondary">
-                        <span className="sr-only">Show history</span>
-                        <HistoryIcon className="h-4 w-4" />
+                    <div className='flex items-center space-x-2'>
+                      <Button onClick={() => exec()}>Submit</Button>
+                      <Button variant='secondary'>
+                        <span className='sr-only'>Show history</span>
+                        <HistoryIcon className='h-4 w-4' />
                       </Button>
                     </div>
                   </div>
                 </TabsContent>
-                <TabsContent value="insert" className="mt-0 border-0 p-0">
-                  <div className="flex flex-col space-y-4">
-                    <div className="grid h-full grid-rows-2 gap-6 lg:grid-cols-2 lg:grid-rows-1">
+                <TabsContent value='text' className='mt-0 border-0 p-0'>
+                  <div className='flex flex-col space-y-4'>
+                    <div className='grid h-full grid-rows-2 gap-6 lg:grid-cols-2 lg:grid-rows-1'>
                       <Textarea
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
                         placeholder="We're writing to [inset]. Congrats from OpenAI!"
-                        className="h-full min-h-[300px] lg:min-h-[700px] xl:min-h-[700px]"
+                        className='h-full min-h-[300px] lg:min-h-[700px] xl:min-h-[700px]'
                       />
-                      <div className="rounded-md border bg-muted"></div>
+                      <div className='rounded-md border bg-muted p-4'>
+                        {JSON.stringify(data, null, 2)}
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Button>Submit</Button>
-                      <Button variant="secondary">
-                        <span className="sr-only">Show history</span>
-                        <HistoryIcon className="h-4 w-4" />
+                    <div className='flex items-center space-x-2'>
+                      <Button
+                        onClick={async () => {
+                          if (!text?.trim) return
+                          await exec()
+                        }}
+                      >
+                        Submit
+                      </Button>
+                      <Button variant='secondary'>
+                        <span className='sr-only'>Show history</span>
+                        <HistoryIcon className='h-4 w-4' />
                       </Button>
                     </div>
                   </div>
                 </TabsContent>
-                <TabsContent value="edit" className="mt-0 border-0 p-0">
-                  <div className="flex flex-col space-y-4">
-                    <div className="grid h-full gap-6 lg:grid-cols-2">
-                      <div className="flex flex-col space-y-4">
-                        <div className="flex flex-1 flex-col space-y-2">
-                          <Label htmlFor="input">Input</Label>
+                <TabsContent value='edit' className='mt-0 border-0 p-0'>
+                  <div className='flex flex-col space-y-4'>
+                    <div className='grid h-full gap-6 lg:grid-cols-2'>
+                      <div className='flex flex-col space-y-4'>
+                        <div className='flex flex-1 flex-col space-y-2'>
+                          <Label htmlFor='input'>Input</Label>
                           <Textarea
-                            id="input"
-                            placeholder="We is going to the market."
-                            className="flex-1 lg:min-h-[580px]"
+                            id='input'
+                            placeholder='We is going to the market.'
+                            className='flex-1 lg:min-h-[580px]'
                           />
                         </div>
-                        <div className="flex flex-col space-y-2">
-                          <Label htmlFor="instructions">Instructions</Label>
+                        <div className='flex flex-col space-y-2'>
+                          <Label htmlFor='instructions'>Instructions</Label>
                           <Textarea
-                            id="instructions"
-                            placeholder="Fix the grammar."
+                            id='instructions'
+                            placeholder='Fix the grammar.'
                           />
                         </div>
                       </div>
-                      <div className="mt-[21px] min-h-[400px] rounded-md border bg-muted lg:min-h-[700px]" />
+                      <div className='mt-[21px] min-h-[400px] rounded-md border bg-muted lg:min-h-[700px]' />
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className='flex items-center space-x-2'>
                       <Button>Submit</Button>
-                      <Button variant="secondary">
-                        <span className="sr-only">Show history</span>
-                        <HistoryIcon className="h-4 w-4" />
+                      <Button variant='secondary'>
+                        <span className='sr-only'>Show history</span>
+                        <HistoryIcon className='h-4 w-4' />
                       </Button>
                     </div>
                   </div>
@@ -356,6 +405,6 @@ export default function Translate() {
           </div>
         </Tabs>
       </div>
-    </>
-  );
+    </Layout>
+  )
 }

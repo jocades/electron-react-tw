@@ -22,11 +22,12 @@ Return only JSON content.
 `
 }
 
-export async function translate(data: any) {
+export async function translate(data: any, temperature = 0.3) {
   // console.log(prompt('Spanish', 'English', JSON.stringify(data, null, 2)))
 
   const result = await openai.chat.completions.create({
     model: MODEL,
+    temperature,
     messages: [
       {
         role: 'user',
