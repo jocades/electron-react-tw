@@ -29,7 +29,7 @@ import { PresetSelector } from '@/components/playground/preset-selector'
 import { PresetShare } from '@/components/playground/preset-share'
 import { TemperatureSelector } from '@/components/playground/temperature-selector'
 import { TopPSelector } from '@/components/playground/top-p-selector'
-import { useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { ElectronHandler } from '@/main/preload'
 import {
   Tooltip,
@@ -39,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input'
 import useToggle from '@/lib/hooks/use-toggle'
 import { LanguageSelector } from '@/components/language-selector'
+import { useIPCMutation } from '@/lib/use-ipc'
 
 /*
  * Main task for now is to open the file explirer, select a json file,
@@ -48,100 +49,6 @@ import { LanguageSelector } from '@/components/language-selector'
  */
 
 type Use<T extends (...args: any[]) => any> = Awaited<ReturnType<T>>
-
-interface IPCOptions<T, E> {
-  fn: (ipc: ElectronHandler) => T | Promise<T>
-  onSucces?: (data: T) => void
-  onError?: (error: E) => void
-}
-
-function useIPC<T, E extends Error = Error>({
-  fn,
-  onSucces = () => {},
-  onError = () => {},
-}: IPCOptions<T, E>) {
-  const [data, setData] = useState<T>()
-
-  const [isLoading, setIsLoading] = useState(false)
-
-  const [error, setError] = useState({ status: false, message: '' })
-
-  async function exec() {
-    setIsLoading(true)
-    try {
-      const result = await fn(window.electron)
-      setData(result)
-      setError({ status: false, message: '' })
-      onSucces(result)
-    } catch (err: any) {
-      setError({ status: true, message: err.message })
-      onError(err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  return {
-    exec,
-    data,
-    isLoading,
-    error,
-    isError: error.status,
-  }
-}
-
-// const { mutate, data, isLoading, ... } = useIPCMutation({
-//  fn: async (newData) => {
-//    const res = await ipc.translate({ text: newData })
-//    return res.data
-//    }
-// })
-
-interface IPCMutationOptions<T, E, I> {
-  fn: (ctx: Ctx<I>) => T | Promise<T>
-  onSucces?: (data: T) => void
-  onError?: (error: E) => void
-}
-
-interface Ctx<I> {
-  ipc: ElectronHandler
-  input: I
-}
-
-function useIPCMutation<T, I = unknown, E extends Error = Error>({
-  fn,
-  onSucces = () => {},
-  onError = () => {},
-}: IPCMutationOptions<T, E, I>) {
-  const [data, setData] = useState<T>()
-
-  const [isLoading, setIsLoading] = useState(false)
-
-  const [error, setError] = useState({ status: false, message: '' })
-
-  async function mutate(input: I) {
-    setIsLoading(true)
-    try {
-      const result = await fn({ ipc: window.electron, input })
-      setError({ status: false, message: '' })
-      setData(result)
-      onSucces(result)
-    } catch (err: any) {
-      setError({ status: true, message: err.message })
-      onError(err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  return {
-    mutate,
-    data,
-    isLoading,
-    error,
-    isError: error.status,
-  }
-}
 
 /*
  * Input editor:
@@ -161,15 +68,7 @@ interface KV {
 export default function Translate() {
   const [kv, setKv] = useState<KV[]>([{ key: '', value: '' }])
 
-  const [langTo, setLangTo] = useState({ label: 'English', value: 'en' })
-
-  const [showLangFrom, toggleLangFrom] = useToggle()
-  const [showLangTo, toggleLangTo] = useToggle()
-
-  const { mutate, data, isLoading, isError, error } = useIPCMutation<
-    Data,
-    Data
-  >({
+  const { mutate, data, isLoading, isError, error } = useIPCMutation({
     fn: async ({ ipc, input }) => {
       const res = await ipc.translate(input)
       return res.data
@@ -185,12 +84,17 @@ export default function Translate() {
   async function onSubmitKv() {
     const json = kv
       .filter((item) => !!item.key?.trim() && !!item.value?.trim())
-      .reduce((acc, item) => ({
-        ...acc,
-        [item.key]: item.value,
-      }), {})
+      .reduce(
+        (acc, item) => ({
+          ...acc,
+          [item.key]: item.value,
+        }),
+        {},
+      )
 
-    console.log('data', json)
+    if (!Object.keys(json).length) return
+
+    console.log('JSON', json)
     await mutate(json)
   }
 
@@ -234,9 +138,7 @@ export default function Translate() {
                         <TabsTrigger value='json'>
                           <span className='sr-only'>Complete</span>
                           <BracesIcon className='h-4 w-4' />
-                          <TooltipContent side='bottom'>
-                            JSON
-                          </TooltipContent>
+                          <TooltipContent side='bottom'>JSON</TooltipContent>
                         </TabsTrigger>
                       </TooltipTrigger>
                     </Tooltip>
@@ -245,9 +147,7 @@ export default function Translate() {
                       <TooltipTrigger asChild>
                         <TabsTrigger value='text'>
                           <MessageCircleIcon className='h-4 w-4' />
-                          <TooltipContent side='bottom'>
-                            Text
-                          </TooltipContent>
+                          <TooltipContent side='bottom'>Text</TooltipContent>
                         </TabsTrigger>
                       </TooltipTrigger>
                     </Tooltip>
@@ -334,9 +234,7 @@ export default function Translate() {
                     {/*  key valeu intpu*/}
 
                     <div className='flex items-center justify-around'>
-                      <h3 className='text-sm font-medium leading-none'>
-                        KEY
-                      </h3>
+                      <h3 className='text-sm font-medium leading-none'>KEY</h3>
                       <h3 className='text-sm font-medium leading-none'>
                         VALUE
                       </h3>
@@ -389,9 +287,7 @@ export default function Translate() {
                     </Button>
 
                     <div className='flex items-center space-x-2'>
-                      <Button onClick={() => onSubmitKv()}>
-                        Submit
-                      </Button>
+                      <Button onClick={() => onSubmitKv()}>Submit</Button>
                       <Button variant='secondary'>
                         <span className='sr-only'>Show history</span>
                         <HistoryIcon className='h-4 w-4' />

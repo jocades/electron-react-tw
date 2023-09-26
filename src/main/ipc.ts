@@ -23,9 +23,9 @@ export function loadIPC() {
   })
 
   ipcMain.handle('translate', async (event, data) => {
-    console.log('recieved data', data)
+    // console.log('recieved data', data)
     // handle erros in the renderer useIPC hook
-    // const result = await translate(data);
-    return { ok: true, data: 'result' }
+    const result = await translate(data)
+    return { ok: true, data: result }
   })
 }
